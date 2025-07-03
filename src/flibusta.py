@@ -6,6 +6,7 @@ __license__ = 'GPL 3'
 __copyright__ = '2012, Sergey Kuznetsov <clk824@gmail.com>, 2022, Ed Ryzhov <ed.ryzhov@gmail.com>'
 __docformat__ = 'restructuredtext en'
 
+import os
 from contextlib import closing
 from qt.core import QUrl
 from calibre import (browser, guess_extension)
@@ -20,8 +21,12 @@ from calibre.gui2.store.search_result import SearchResult
 
 class FlibustaStore(StorePlugin):
 
-    open_search_url = 'https://raw.githubusercontent.com/alardus/flibusta-calibre-opds-store/main/opds-opensearch.xml'
     web_url = 'https://flibusta.site/'
+    
+    def __init__(self, *args, **kwargs):
+        super(FlibustaStore, self).__init__(*args, **kwargs)
+        # Путь к локальному файлу opds-opensearch.xml
+        self.opensearch_file = os.path.join(os.path.dirname(__file__), '..', 'opds-opensearch.xml')
 
     def open(self, parent=None, detail_item=None, external=False):
         if not hasattr(self, 'web_url'):
@@ -36,16 +41,22 @@ class FlibustaStore(StorePlugin):
             d.exec()
 
     def search(self, query, max_results=10, timeout=60):
-        if not getattr(self, 'open_search_url', None):
+        if not os.path.exists(self.opensearch_file):
             return
 
-        yield from FlibustaStore.open_search(self.open_search_url, query, max_results, timeout)
+        yield from FlibustaStore.open_search(self.opensearch_file, query, max_results, timeout)
 
-    def open_search(url, query, max_results, timeout):
-        description = Description(url)
+    @staticmethod
+    def open_search(opensearch_path, query, max_results, timeout):
+        # Создаем Description из локального файла
+        with open(opensearch_path, 'rb') as f:
+            opensearch_content = f.read()
+        
+        description = Description(opensearch_content)
         url_template = description.get_best_template()
         if not url_template:
             return
+        
         oquery = Query(url_template)
 
         # set up initial values
@@ -96,6 +107,7 @@ class FlibustaStore(StorePlugin):
 
                 yield s
 
+    @staticmethod
     def custom_guess_extension(type):
         ext = guess_extension(type)
         if ext:
